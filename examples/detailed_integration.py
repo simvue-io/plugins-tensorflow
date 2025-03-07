@@ -23,6 +23,9 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 import simvue_tensorflow.plugin as sv_tf
 
 def tensorflow_example(run_folder, offline=False):
+    # Delete results from previous run, if they exist:
+    pathlib.Path(__file__).parent.joinpath("results").unlink(missing_ok=True)
+    
     # Load the training and test data
     (img_train, label_train), (img_test, label_test) = keras.datasets.fashion_mnist.load_data()
 
@@ -43,8 +46,8 @@ def tensorflow_example(run_folder, offline=False):
 
     # Can use the ModelCheckpoint callback, which is built into Tensorflow, to save a model after each Epoch
     # Providing the model_checkpoint_filepath in the TensorVue callback means it will automatically upload checkpoints to the Epoch runs
-    temp_dir = tempfile.TemporaryDirectory()
-    checkpoint_filepath = str(pathlib.Path(temp_dir.name).joinpath("checkpoint.model.keras"))
+    results_dir = pathlib.Path(__file__).parent.joinpath("results")
+    checkpoint_filepath = str(pathlib.Path(results_dir.name).joinpath("checkpoint.model.keras"))
     model_checkpoint_callback = ModelCheckpoint(
         filepath=checkpoint_filepath, save_best_only=False, verbose=1
     )
@@ -85,7 +88,7 @@ def tensorflow_example(run_folder, offline=False):
         evaluation_target=0.99,
 
         # Choose where the final model is saved
-        model_final_filepath=str(pathlib.Path(temp_dir.name).joinpath("tf_fashion_model.keras"))
+        model_final_filepath=str(pathlib.Path(results_dir.name).joinpath("tf_fashion_model.keras"))
     )
 
     # Fit and evaluate the model, including the tensorvue callback:

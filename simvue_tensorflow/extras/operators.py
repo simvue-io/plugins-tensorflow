@@ -1,6 +1,6 @@
-"""Common.
+"""Operators.
 
-Classses which could be used in the construction of multiple adapters.
+Operators used in the definition of a TensorVue instance
 """
 # ruff: noqa: DOC201
 

@@ -17,6 +17,7 @@ from simvue.api.objects import (
 from tensorflow.keras.callbacks import Callback
 
 import simvue_tensorflow.extras.operators as operators
+from simvue_tensorflow.extras.create_alerts import create_alerts
 
 
 class TensorVue(Callback):
@@ -110,8 +111,6 @@ class TensorVue(Callback):
             Raised if the ML Optimisation framework is not enabled and no run name was provided
         KeyError
             Raised if attempted to add an alert to a run which was not defined
-        RuntimeError
-            Raised if a valid source could not be deduced from alert definition
 
         """
         if not optimisation_framework and not run_name:
@@ -125,6 +124,7 @@ class TensorVue(Callback):
         self.run_tags = run_tags or []
         self.run_metadata = run_metadata or {}
         self.run_mode = run_mode
+        self.alert_definitions = alert_definitions
         self.script_filepath = script_filepath
         self.model_checkpoint_filepath = model_checkpoint_filepath
         self.model_final_filepath = model_final_filepath
@@ -136,32 +136,14 @@ class TensorVue(Callback):
         self.simulation_run = simulation_run
         self.eval_run = evaluation_run
 
-        self.alerts = {}
+        # Create alerts in a disabled run up front, to validate that they have been defined accurately
         if alert_definitions:
             with simvue.Run(mode="disabled") as temp_run:
-                for alert_name, alert_definition in alert_definitions.items():
-                    _source = alert_definition.pop("source")
-                    if _source == "events":
-                        _alert_id = temp_run.create_event_alert(
-                            name=alert_name, **alert_definition, attach_to_run=False
-                        )
-                    elif _source == "metrics" and alert_definition.get("threshold"):
-                        _alert_id = temp_run.create_metric_threshold_alert(
-                            name=alert_name, **alert_definition, attach_to_run=False
-                        )
-                    elif _source == "metrics":
-                        _alert_id = temp_run.create_metric_range_alert(
-                            name=alert_name, **alert_definition, attach_to_run=False
-                        )
-                    elif _source == "user":
-                        _alert_id = temp_run.create_user_alert(
-                            name=alert_name, **alert_definition, attach_to_run=False
-                        )
-                    else:
-                        raise RuntimeError(
-                            f"{alert_name} has unknown source type '{_source}'"
-                        )
-                    self.alerts[alert_name] = _alert_id
+                temp_run._user_config.run.mode == self.run_mode
+                [
+                    create_alerts(alert_name, alert_definition, temp_run)
+                    for alert_name, alert_definition in alert_definitions.items()
+                ]
 
         self.manifest_alerts = manifest_alerts or []
         self.simulation_alerts = simulation_alerts or []
@@ -175,7 +157,7 @@ class TensorVue(Callback):
             + self.evaluation_alerts
             + self.manifest_alerts
         ):
-            if alert_name not in self.alerts.keys():
+            if alert_name not in self.alert_definitions.keys():
                 raise KeyError(
                     f"Alert name {alert_name} not present in alert definitions."
                 )
@@ -202,10 +184,10 @@ class TensorVue(Callback):
             description=self.run_description,
             metadata=self.run_metadata,
         )
-        if self.manifest_alerts:
-            manifest_run.add_alerts(
-                [self.alerts[alert_name] for alert_name in self.manifest_alerts]
-            )
+        [
+            create_alerts(alert_name, self.alert_definitions[alert_name], manifest_run)
+            for alert_name in self.manifest_alerts
+        ]
 
         if self.script_filepath:
             manifest_run.save_file(
@@ -262,10 +244,12 @@ class TensorVue(Callback):
 
         self.simulation_run.update_metadata(self.params)
 
-        if self.simulation_alerts:
-            self.simulation_run.add_alerts(
-                [self.alerts[alert_name] for alert_name in self.simulation_alerts]
+        [
+            create_alerts(
+                alert_name, self.alert_definitions[alert_name], self.simulation_run
             )
+            for alert_name in self.simulation_alerts
+        ]
 
         if self.script_filepath:
             self.simulation_run.save_file(
@@ -336,9 +320,12 @@ class TensorVue(Callback):
         )
 
         if self.epoch_alerts and epoch + 1 >= self.start_alerts_from_epoch:
-            self.epoch_run.add_alerts(
-                [self.alerts[alert_name] for alert_name in self.epoch_alerts]
-            )
+            [
+                create_alerts(
+                    alert_name, self.alert_definitions[alert_name], self.epoch_run
+                )
+                for alert_name in self.epoch_alerts
+            ]
 
         if epoch > 0:
             self.epoch_run.log_event("Accuracy and Loss values before epoch training:")
@@ -534,10 +521,12 @@ class TensorVue(Callback):
                         "evaluation",
                     ]
                 )
-            if self.evaluation_alerts:
-                self.eval_run.add_alerts(
-                    [self.alerts[alert_name] for alert_name in self.evaluation_alerts]
+            [
+                create_alerts(
+                    alert_name, self.alert_definitions[alert_name], self.eval_run
                 )
+                for alert_name in self.evaluation_alerts
+            ]
 
             if self.script_filepath:
                 self.eval_run.save_file(

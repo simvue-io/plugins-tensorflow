@@ -8,8 +8,7 @@ from simvue.sender import sender
 @pytest.mark.parametrize("offline", (True, False), ids=("offline", "online"))
 def test_tensorflow_connector(folder_setup, offline):
     
-    run_name = tensorflow_example(folder_setup)
-
+    run_name = tensorflow_example(folder_setup, offline)
     if offline:
         _id_mapping = sender()
         
