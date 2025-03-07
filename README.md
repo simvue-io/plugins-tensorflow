@@ -1,4 +1,4 @@
-# Simvue Connectors - Template
+# Simvue Plugins - TensorFlow
 
 <br/>
 
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-This is a template repository which allows you to quickly create new Plugins which provide Simvue tracking and monitoring functionality to Python-based simulations.
+This plugin allows you to easily add Simvue tracking and monitoring functionality to the training and testing of ML models built using TensorFlow.
 </p>
 
 <div align="center">
@@ -25,64 +25,15 @@ This is a template repository which allows you to quickly create new Plugins whi
   <a href="https://docs.simvue.io"><b>Documentation</b></a>
 </h3>
 
-## How to use this template
-
-### Naming your plugin
-First, make a name for your new plugin. Typically, the module name is of the form `simvue-{software_name}`, and the connector class itself is of the form `{SoftwareName}Run`. Update the `pyproject.toml` file with the name of your module, and also update the directory currently called `simvue_template` with your module name.
-
-### Creating the code
-Ideally, the plugin class which you want users to interact with should be made in the `plugin.py` file inside your module, with any extra functionality which it needs to work (but you don't want inside the class itself) put in files inside the `extras` directory. However since there is no set format for plugins (unlike the more rigid structure of connectors), this may change depending on your needs. Make sure you document thoroughly in the README and then examples how you intend for your plugin to be used. Check out any of our premade plugins for ideas:
-
-* [TensorFlow](https://github.com/simvue-io/plugins-tensorflow)
-
-Also look at the `CONTRIBUTING.md` file for expected coding standards.
-
-
-### Writing examples
-In the `examples` directory, please provide at least one example of your plugin being used to track your simulation software. Create this example inside a function so that it can be used in the integration tests.
-
-### Writing tests
-You should create two types of tests:
-
-* Unit tests: Check each element of your plugin independently, such as file parsers and callbacks, each method etc. These should use Pytest.
-* Integration tests: These check the end-to-end functionality of your plugin when used with the actual simulation software. You should parametrize the test to include offline mode, as well as online. You can use the example(s) which you created earlier as the basis for these tests.
-
-### CI Workflows
-Inside the `.github` directory, there are a number of workflows already created. You should edit these to work for your plugin. They include:
-
-* `test_macos`, `test_ubuntu`, `test_windows`: These run the unit and integration tests, should not need to be altered
-* `deploy`: Automates deployment to test-PyPI and PyPI for tagged releases (see below). You need to update the module names in this file - see the curly brackets.
-
-### Deployment
-When you are happy with your plugin and are ready to deploy it to PyPI for the first time, you need to do the following:
-
-* Install `poetry` and `twine` if you haven't already: `pip install poetry twine`
-* Check your `pyproject.toml` file is valid by running `poetry check`
-* Install your module: `poetry install`
-* Build the distribution: `poetry build`
-* Go to `test.pypi.org`, create an account, and get a token
-* Upload your package with Twine: `twine upload -r testpypi dist/*`
-* Enter the token when prompted
-* Go to `https://test.pypi.org/project/{your-package-name}`, check it has been published
-* Click 'Manage Project'
-* If you wish to enable automatic deployments, click 'Publishing' -> 'Add a new publisher' and fill in the details for your repository, setting Workflow name to `deploy.yaml` and Environment name to `test_pypi`
-
-If this was all successful, repeat with the real PyPI instance at `pypi.org`, using `twine upload dist/*`, and setting the Environment name in the publisher settings to `pypi`.
-
-From now on, you can do deployments automatically. Simply:
-
-* Update the `pyproject.toml` with a new version number, eg `v1.0.1`
-* Update the CHANGELOG to reflect your newest changes
-* Tag a branch with a semantic version number, eg `git tag v1.0.1`
-* Push the tag: `git push origin v1.0.1`
-
-This should automatically start the deployment workflow - check that it completes successfully on the Github UI.
-
-### Updating the README
-When finished, delete all of the information above under the 'How to use this template' heading. Then update the information below to be relevant for your plugin:
-
 ## Implementation
-{List here how your Plugin works, and the things about the simulation it tracks by default.}
+This package provides a custom `TensorVue` callback, which inherits from TensorFlow's `Callback` class. This will do the following when training, testing or validating a model:
+
+* Uploads the Python script creating the model as a Code Artifact
+* Uploads the model config as an Input Artifact
+* Uploads parameters about the model as Metadata
+* Uploads the Training Accuracy and Loss after each batch to an Epoch runUploads the Training and Validation Accuracy and Loss after each Epoch to the Simulation run
+* Uploads model checkpoints after each Epoch to the corresponding Epoch run as Output Artifacts(if enabled by the user)
+* Uploads the final model to the Simulation run as an Output Artifact
 
 ## Installation
 To install and use this plugin, first create a virtual environment:
@@ -95,7 +46,7 @@ source venv/bin/activate
 ```
 And then use pip to install this module:
 ```
-pip install {your_module_name_here}
+pip install simvue-tensorflow
 ```
 
 ## Configuration
@@ -113,7 +64,60 @@ token = "..."
 The exact contents of both of the above options can be obtained directly by clicking the **Create new run** button on the web UI. Note that the environment variables have preference over the config file.
 
 ## Usage example
-{Give an example of how to use your plugin, with details such as the actual simulation being run abstracted away to make it as generic as possible.}
+
+```python
+import tensorflow as tf
+from tensorflow import keras
+import numpy
+import matplotlib.pyplot as plt
+
+# Firstly we import our Tensorflow integration:
+import simvue_tensorflow.plugin as sv_tf
+
+# Load the training and test data
+(img_train, label_train), (img_test, label_test) = keras.datasets.fashion_mnist.load_data()
+
+# Normalize pixel values between 0 and 1
+img_train = img_train.astype('float32') / 255.0
+img_test = img_test.astype('float32') / 255.0
+
+# Create a basic model
+model = keras.Sequential()
+
+model.add(keras.layers.Flatten(input_shape=(28, 28)))
+model.add(keras.layers.Dense(32, activation='relu'))
+model.add(keras.layers.Dense(10))
+
+model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.01),
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            metrics=['accuracy'])
+
+# At the most basic level, all we need to do is initialize our callback, providing a run name
+tensorvue = sv_tf.TensorVue("recognising_clothes_basic")
+
+# Train the model.
+model.fit(
+    img_train,
+    label_train,
+    epochs=5,
+    validation_split=0.2,
+    # Add the tensorvue class as a callback
+    callbacks=[tensorvue,]
+)
+
+# That's it! Check your Simvue dashboard and you should see:
+#    - A 'simulation' run, which summarises the overall training performance
+#    - A number of 'epoch' runs, which show the training performed in each epoch
+
+# You can also use the TensorVue callback to record results from model.evaluate
+# Above we do it all in one step during the fitting, but you can also do it afterwards:
+results = model.evaluate(
+    img_test,
+    label_test,
+    # Add the tensorvue class as a callback
+    callbacks=[tensorvue,]
+)
+```
 
 ## License
 

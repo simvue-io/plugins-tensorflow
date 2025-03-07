@@ -17,7 +17,7 @@ Provide instructions on how to run your plugin, eg:
 import pathlib
 import shutil
 import uuid
-from simvue_template.plugin import YourPlugin
+from simvue_tensorflow.plugin import YourPlugin
 
 # Define a function for running your example
 def example(offline=False) -> None:

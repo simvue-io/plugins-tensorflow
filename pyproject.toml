@@ -1,7 +1,7 @@
 [project]
-name = "simvue-template"
+name = "simvue-tensorflow"
 version = "1.0.0a1"
-description = "Template repository for creating Plugin classes."
+description = "Plugin to allow you to easily add Simvue tracking and monitoring to the training of Tensorflow ML models."
 authors = [
     {name = "Matt Field",email = "matthew.field@ukaea.uk"}
 ]
@@ -9,6 +9,7 @@ readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "simvue (==2.0.0a3)",
+    "tensorflow (>=2.18.0,<3.0.0)",
     ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -37,7 +38,7 @@ keywords = [
 
 [project.urls]
 homepage = "https://simvue.io"
-repository = "https://github.com/simvue-io/plugins-template"
+repository = "https://github.com/simvue-io/plugins-tensorflow"
 documentation = "https://docs.simvue.io"
 
 [tool.poetry.group.dev.dependencies]
